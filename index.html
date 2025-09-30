@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calgary Black Community History Map</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        #header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        #header p {
+            font-size: 15px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        #controls {
+            background-color: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 2px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .control-group label {
+            font-weight: 600;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        #toggleHistoric {
+            padding: 10px 20px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #toggleHistoric:hover {
+            background-color: #0b5ed7;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        #toggleHistoric:active {
+            transform: translateY(0);
+        }
+        
+        #opacitySlider {
+            width: 180px;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        #opacityValue {
+            min-width: 40px;
+            font-weight: 600;
+            color: #0d6efd;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .info-window {
+            max-width: 350px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 5px;
+        }
+        
+        .info-window h3 {
+            margin: 0 0 8px 0;
+            color: #1a1a2e;
+            font-size: 18px;
+            font-weight: 600;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 6px;
+        }
+        
+        .info-date {
+            color: #6c757d;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .info-window p {
+            margin: 0;
+            line-height: 1.6;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .info-address {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #dee2e6;
+            font-size: 13px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+        }
+
+        #loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Black Calgary Map</h1>
+        <p>Calgary Atlas Project</p>
+    </div>
+    
+    <div id="controls">
+        <div class="control-group">
+            <button id="toggleHistoric">Show 1959 Historic Map</button>
+        </div>
+        <div class="control-group">
+            <label for="opacitySlider">Historic Map Opacity:</label>
+            <input type="range" id="opacitySlider" min="0" max="100" value="70">
+            <span id="opacityValue">70%</span>
+        </div>
+    </div>
+    
+    <div id="loading">Loading map...</div>
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let historicOverlay;
+        let overlayVisible = false;
+        let markers = [];
+        let infoWindow;
+        let geocoder;
+
+        // Google Maps API Key
+        const API_KEY = 'AIzaSyBqFiWRHrIN59cStQqzwV_VC7t8N7ykZc8';
+
+        // MapWarper tile URL
+        const HISTORIC_MAP_TILES = 'https://mapwarper.net/maps/tile/97523/{z}/{x}/{y}.png';
+
+        // Calgary center
+        const CALGARY_CENTER = { lat: 51.0447, lng: -114.0719 };
+
+        // Location data from CSV
+        const locations = [
+            { location: "1A. Lewis Family Residence", date: "c. 1887-1889", significance: "First large black family to establish homes in Calgary and vicinity", address: "8 Ave SW, Calgary, Alberta" },
+            { location: "1B. Lewis Family Residence", date: "c. 1887-1889", significance: "First large black family to establish homes in Calgary and vicinity", address: "9904 138 Ave SE, Calgary, Alberta" },
+            { location: "1C. Lewis Family Residence", date: "c. 1907", significance: "First large black family to establish homes in Calgary and vicinity", address: "1240 33 St SW, Calgary, Alberta" },
+            { location: "4. Courthouse", date: "", significance: "Charlotte Lewis has legal trouble (May 20, 1891): laundry theft incident with Mary Henson. Charles Henry Daniels launches lawsuit in what may be Alberta's first civil rights case (March 1914). Violet King Henry first Black woman called to the bar in Canada (1954)", address: "Courthouse Park, Calgary, Alberta" },
+            { location: "3. Alexander Residence", date: "c. 1889", significance: "Daniel Lewis builds home for one of the two prominent Alexander brothers.", address: "1 St SW & 8 Ave SW, Calgary, Alberta" },
+            { location: "4. Exhibition Grounds", date: "", significance: "John Ware wins a saddle in championship roping contest in 1893 at Calgary Exhibition with a time of 53 seconds. Herman Risby performs here in 1939. Minnie Turner, AAACP organize march between Stampede Grounds and Standard Church (1307, 10 Ave SE) to honour MLK Jr following his assassination (April 10, 1968)", address: "1908 Stampede Trl SE, Calgary, Alberta" },
+            { location: "5A. Land Titles Office", date: "c. 1895-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "3 St SW & 7 Ave, Calgary, Alberta" },
+            { location: "5B. Land Titles Office", date: "c. 1895-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "1 St SW & 9 Ave, Calgary, Alberta" },
+            { location: "5C. Land Titles Office", date: "c. 1895-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "8 Ave SW & 3 St SW, Calgary, Alberta" },
+            { location: "5D. Police Station, Jail, Courthouse", date: "c. 1893-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "2 St SE & 7 Ave, Calgary, Alberta" },
+            { location: "6. Royal Hotel", date: "c. 1893-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "8 Ave SW & Centre St, Calgary, Alberta" },
+            { location: "7A. First Baptist Church", date: "13-Sep-05", significance: "John Ware's body is brought to Calgary for his funeral, said to be the largest held in Calgary up to that point.", address: "6 Ave & 1 St SW, Calgary, Alberta" },
+            { location: "7B. Union Cemtery", date: "13-Sep-05", significance: "John Ware's body is brought to Calgary for his funeral, said to be the largest held in Calgary up to that point.", address: "Erlton St & 32 Ave SW, Calgary, Alberta" },
+            { location: "7C. CPR Station", date: "13-Sep-05", significance: "Nettie, her siblings and grandparents are met by ranch hand Joe Standish at the train station upon arrival for her father's funeral.", address: "101 9 Ave SW, Calgary, Alberta" },
+            { location: "8. Charles Watts Residence", date: "13-Jan-10", significance: "Musician, CPPA officer", address: "168 6 Ave SE, Calgary, Alberta" },
+            { location: "9A. Robert Clayton's Barbershop", date: "13-Jan-10", significance: "CPPA officer", address: "817 McLeod Trail, Calgary, Alberta" },
+            { location: "9B. Robert Clayton's Residence", date: "13-Jan-10", significance: "CPPA officer", address: "610 6 Ave SE, Calgary, Alberta" },
+            { location: "9C. Clinton Ford Residence", date: "13-Jan-10", significance: "Musician, CPPA officer", address: "539 6 Ave SE, Calgary, Alberta" },
+            { location: "10. Eagle Hall", date: "10-Oct-10", significance: "CPPA holds its first \"Colored Ball,\" attracting 150 Black people.", address: "1209 1 St SW, Calgary, Alberta" },
+            { location: "11. Palmer Residence", date: "11-Dec-25", significance: "CPPA accused of paying for a lawyer to help Harry and Bertha Palmer defend against a charge of operating a disorderly house.", address: "511 2 Ave NE, Calgary, Alberta" },
+            { location: "12. Sherman Grand Theatre", date: "03-Feb-14", significance: "Charles Henry Daniels is denied entry into theatre (owned by Sir James Lougheed) after refusing to accept segregated seating in the balcony. In March 1914, Daniels launches lawsuit in what may be Alberta's first civil rights case.", address: "608 1 St SW, Calgary, Alberta" },
+            { location: "13. F. H. Bell Residence", date: "13-Apr-25", significance: "Calgary's first known Black church organized.", address: "408 3 St SE, Calgary, Alberta" },
+            { location: "14. City Hall", date: "", significance: "February-May 1920, nearly 70% of White residents of Victoria Park submit a petition to City Hall, demanding that Black people be removed from the community and permanently barred. Charles Watts, S. Davis, and Henry Stewart and other Black Calgarians oppose the petition. Oliver Bowen hired by City of Calgary Transportation Department after graduating from the U of A as an engineer (1965). Bowen would go on to design and implement the C-Train.", address: "720 Macleod Trail SE, Calgary, Alberta" },
+            { location: "15. Robinson and Linton Hall", date: "1920-1922", significance: "Charles Watts and many other Black citizens form a chapter of \"Guiding Star OES\" for fund-raising and social purposes.", address: "8 Ave SE, Calgary, Alberta" },
+            { location: "16. Rescue Mission (?)", date: "1921", significance: "Universal Negro Improvement Association (Marcus Garvey back to Africa Movement) tries to get traction in Calgary, may have hidden itself under guise of Guiding Star OES", address: "Calgary, Alberta" },
+            { location: "17A. Anglican Cathedral Church of the Redeemer", date: "02-Aug-22", significance: "Elegant wedding of Marjorie Gideon and Raymond Harrisn, attended by dozens of Black Calgarians and other guests from across the continent.", address: "604 1 St SE, Calgary, Alberta" },
+            { location: "17B. Stewart Family Residence", date: "02-Aug-22", significance: "Reception for Marjorie Gideon and Raymond Harris at her parents' home", address: "531 14 Ave SE, Calgary, Alberta" },
+            { location: "18. May Emory Residence", date: "31-Jan-25", significance: "Emory was a longtime business owner who endured years of police harrassment. She died of poisoning in January 1931.", address: "620 9 Ave SE, Calgary, Alberta" },
+            { location: "19A. Variety Theatre", date: "1936-1943", significance: "Lou and Dick Darby establish careers as musicians, nightclub owners. The beginning of Calgary's Black club scene. Herman Risby also performs here.", address: "200 8 Ave SE, Calgary, Alberta" },
+            { location: "19B. Capitol Theatre", date: "1936-1943", significance: "Lou and Dick Darby establish careers as musicians, nightclub owners. The beginning of Calgary's Black club scene.", address: "130 8 Ave SW, Calgary, Alberta" },
+            { location: "19C. CFAC Radio Station", date: "1936-1943", significance: "Lou and Dick Darby establish careers as musicians, nightclub owners. The beginning of Calgary's Black club scene.", address: "130 7 Ave SW, Calgary, Alberta" },
+            { location: "19D. Palace Theatre", date: "1936-1943", significance: "Lou and Dick Darby establish careers as musicians, nightclub owners. The beginning of Calgary's Black club scene. Herman Risby also performs here.", address: "219 8 Ave SW, Calgary, Alberta" },
+            { location: "19E. Palomar at Chestermere Lake", date: "1936-1943", significance: "Lou and Dick Darby establish careers as musicians, nightclub owners. The beginning of Calgary's Black club scene.", address: "Chestermere, Alberta" },
+            { location: "19F. Lou Darby Residence", date: "01-Apr-40", significance: "Lou, Dick and Eva Darby and her husband Thomas Liesk attacked by 200-300 rioting soldiers.", address: "133 2 Ave SE, Calgary, Alberta" },
+            { location: "20. Palliser Hotel", date: "22-Apr-05", significance: "Herman Risby, billed as Calgary's favourite \"Colored Entertainer,\" performs here.", address: "Calgary, Alberta" },
+            { location: "21. Southern Chicken Inn Restaurant", date: "September (?) 1941", significance: "Opened by Bob Melton", address: "812 5 St SE, Calgary, Alberta" },
+            { location: "22. Chicken Fry Restaurant", date: "01-Feb-43", significance: "Opened by Louella (Carothers Coleman Bellamy)", address: "134 9 Ave SE, Calgary, Alberta" },
+            { location: "23. Helmer's Billiards Parlor", date: "21-May-45", significance: "\"Skinny\" Hill (probably William E. Hill) recruits Black men to work as porters on behalf of Bob Ware, later forms all Black baseball team, capitalizing on the popularity of touring Black ball teams.", address: "210 8 Ave SW, Calgary, Alberta" },
+            { location: "24. Labour Temple", date: "", significance: "July 20-22, 1945, historic meeting in Calgary (attended by international civil rights and union organizer A. Phillip Randolph) that results in the creation of the Calgary branch of the Brotherhood of Sleeping Car Porters, the Ladies Auxiliary of the BSCP and the Canadian League for the Advancement of Coloured People. Andrew and Edith (Smith) Risby were married here in 1948.", address: "229 11 Ave SE, Calgary, Alberta" },
+            { location: "25A. Glad Tidings Holiness Mission", date: "1949", significance: "Andrew and Edith (Smith) Risby establish Calgary's longest running Black church.", address: "409 8 Ave SE, Calgary, Alberta" },
+            { location: "25B. Standard Church", date: "1965", significance: "Andrew and Edith (Smith) Risby establish Calgary's longest running Black church. March to honour MLK Jr on April 10, 1968, ends here.", address: "1307 10 Ave SE, Calgary, Alberta" },
+            { location: "26. Roy and Cordie Williams Residence", date: "1959", significance: "Six Christmas dinners shared between the Williams, Richardson, Sneed, Risby, Hayes, and Foggo families. These families were foundational to a close-knit social structure.", address: "2008 43 Ave SW, Calgary, Alberta" },
+            { location: "27. The Corral", date: "1970", significance: "Floyd Sneed's triumphant return to Calgary as the drummer of international rock band sensation Three Dog Night.", address: "10 Corral Trail SE, Calgary, Alberta" }
+        ];
+
+        function initMap() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+
+            // Create the map
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: CALGARY_CENTER,
+                zoom: 13,
+                mapTypeId: 'roadmap',
+                mapTypeControl: true,
+                streetViewControl: true,
+                fullscreenControl: true
+            });
+
+            // Create geocoder and info window
+            geocoder = new google.maps.Geocoder();
+            infoWindow = new google.maps.InfoWindow();
+
+            // Geocode all locations
+            geocodeLocations();
+
+            // Create historic overlay
+            const HistoricMapType = new google.maps.ImageMapType({
+                getTileUrl: function(coord, zoom) {
+                    return HISTORIC_MAP_TILES
+                        .replace('{z}', zoom)
+                        .replace('{x}', coord.x)
+                        .replace('{y}', coord.y);
+                },
+                tileSize: new google.maps.Size(256, 256),
+                name: '1959 Calgary Map',
+                opacity: 0.7
+            });
+
+            historicOverlay = HistoricMapType;
+
+            // Set up controls
+            setupControls();
+
+            loading.classList.remove('show');
+        }
+
+        function geocodeLocations() {
+            let geocoded = 0;
+            const total = locations.length;
+
+            locations.forEach((location, index) => {
+                // Add slight delay to avoid hitting rate limits
+                setTimeout(() => {
+                    geocoder.geocode({ address: location.address }, (results, status) => {
+                        if (status === 'OK') {
+                            createMarker(results[0].geometry.location, location);
+                        } else {
+                            console.warn(`Geocoding failed for ${location.location}: ${status}`);
+                        }
+                        
+                        geocoded++;
+                        if (geocoded === total) {
+                            console.log(`Successfully geocoded ${geocoded} of ${total} locations`);
+                        }
+                    });
+                }, index * 200); // 200ms delay between requests
+            });
+        }
+
+        function createMarker(position, location) {
+            const marker = new google.maps.Marker({
+                position: position,
+                map: map,
+                title: location.location,
+                animation: google.maps.Animation.DROP
+            });
+
+            marker.addListener('click', () => {
+                const content = `
+                    <div class="info-window">
+                        <h3>${location.location}</h3>
+                        ${location.date ? `<span class="info-date">${location.date}</span>` : ''}
+                        <p>${location.significance}</p>
+                        <div class="info-address">${location.address}</div>
+                    </div>
+                `;
+                infoWindow.setContent(content);
+                infoWindow.open(map, marker);
+            });
+
+            markers.push(marker);
+        }
+
+        function setupControls() {
+            const toggleButton = document.getElementById('toggleHistoric');
+            const opacitySlider = document.getElementById('opacitySlider');
+            const opacityValue = document.getElementById('opacityValue');
+
+            toggleButton.addEventListener('click', () => {
+                if (overlayVisible) {
+                    map.overlayMapTypes.clear();
+                    toggleButton.textContent = 'Show 1959 Historic Map';
+                    overlayVisible = false;
+                } else {
+                    map.overlayMapTypes.push(historicOverlay);
+                    toggleButton.textContent = 'Hide 1959 Historic Map';
+                    overlayVisible = true;
+                }
+            });
+
+            opacitySlider.addEventListener('input', (e) => {
+                const opacity = e.target.value / 100;
+                opacityValue.textContent = e.target.value + '%';
+                historicOverlay.opacity = opacity;
+                
+                if (overlayVisible) {
+                    map.overlayMapTypes.clear();
+                    map.overlayMapTypes.push(historicOverlay);
+                }
+            });
+        }
+
+        function loadGoogleMapsAPI() {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&callback=initMap`;
+            script.async = true;
+            script.defer = true;
+            script.onerror = () => {
+                alert('Error loading Google Maps. Please check your API key.');
+            };
+            document.head.appendChild(script);
+        }
+
+        window.addEventListener('load', loadGoogleMapsAPI);
+    </script>
+</body>
+</html>
