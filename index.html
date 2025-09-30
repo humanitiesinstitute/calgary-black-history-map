@@ -160,8 +160,8 @@
 </head>
 <body>
     <div id="header">
-        <h1>Black Calgary Map</h1>
-        <p>Calgary Atlas Project</p>
+        <h1>Calgary Black Community History Map</h1>
+        <p>Explore the historic locations that shaped Calgary's Black community from 1887 to 1970</p>
     </div>
     
     <div id="controls">
@@ -186,8 +186,8 @@
         let infoWindow;
         let geocoder;
 
-        // Google Maps API Key
-        const API_KEY = 'AIzaSyBqFiWRHrIN59cStQqzwV_VC7t8N7ykZc8';
+        // Google Maps API Key - REPLACE WITH YOUR KEY
+        const API_KEY = 'AIzaSyAvpTKTv4aLuIuzKfBM5WBGZbbD0SJRWl0';
 
         // MapWarper tile URL
         const HISTORIC_MAP_TILES = 'https://mapwarper.net/maps/tile/97523/{z}/{x}/{y}.png';
@@ -209,7 +209,7 @@
             { location: "5D. Police Station, Jail, Courthouse", date: "c. 1893-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "2 St SE & 7 Ave, Calgary, Alberta" },
             { location: "6. Royal Hotel", date: "c. 1893-1900", significance: "John Ware has a series of frustrating interactions with police (see story of altercation with Norman Jackson for context)", address: "8 Ave SW & Centre St, Calgary, Alberta" },
             { location: "7A. First Baptist Church", date: "13-Sep-05", significance: "John Ware's body is brought to Calgary for his funeral, said to be the largest held in Calgary up to that point.", address: "6 Ave & 1 St SW, Calgary, Alberta" },
-          { location: "7B. Union Cemetery", date: "13-Sep-05", significance: "John Ware's body is brought to Calgary for his funeral, said to be the largest held in Calgary up to that point.", address: "Erlton St & 32 Ave SW, Calgary, AB T2C 4H3" },
+            { location: "7B. Union Cemetery", date: "13-Sep-05", significance: "John Ware's body is brought to Calgary for his funeral, said to be the largest held in Calgary up to that point.", address: "Erlton St & 32 Ave SW, Calgary, AB T2C 4H3" },
             { location: "7C. CPR Station", date: "13-Sep-05", significance: "Nettie, her siblings and grandparents are met by ranch hand Joe Standish at the train station upon arrival for her father's funeral.", address: "101 9 Ave SW, Calgary, Alberta" },
             { location: "8. Charles Watts Residence", date: "13-Jan-10", significance: "Musician, CPPA officer", address: "168 6 Ave SE, Calgary, Alberta" },
             { location: "9A. Robert Clayton's Barbershop", date: "13-Jan-10", significance: "CPPA officer", address: "817 McLeod Trail, Calgary, Alberta" },
@@ -289,6 +289,13 @@
             const total = locations.length;
 
             locations.forEach((location, index) => {
+                // Use hardcoded coordinates for Union Cemetery
+                if (location.location === "7B. Union Cemetery") {
+                    createMarker(new google.maps.LatLng(51.027704, -114.056605), location);
+                    geocoded++;
+                    return;
+                }
+
                 // Add slight delay to avoid hitting rate limits
                 setTimeout(() => {
                     geocoder.geocode({ address: location.address }, (results, status) => {
